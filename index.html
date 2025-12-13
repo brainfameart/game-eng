@@ -1,0 +1,723 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Web3D Engine V3 - Smart Scripting</title>
+    <!-- Ace Editor for Syntax Highlighting -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.4.12/ace.js"></script>
+    <style>
+        :root {
+            --bg-dark: #1e1e1e;
+            --bg-panel: #252526;
+            --bg-header: #333333;
+            --text-main: #cccccc;
+            --accent: #007acc;
+            --border: #3e3e42;
+            --success: #4ec9b0;
+            --error: #f44336;
+        }
+
+        body {
+            margin: 0; overflow: hidden; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--bg-dark); color: var(--text-main);
+            display: flex; flex-direction: column; height: 100vh;
+        }
+
+        /* TOOLBAR */
+        #toolbar {
+            height: 45px; background-color: var(--bg-header); display: flex; align-items: center;
+            padding: 0 10px; border-bottom: 1px solid var(--border); gap: 6px; user-select: none;
+        }
+
+        .btn {
+            background-color: var(--bg-panel); border: 1px solid var(--border); color: white;
+            padding: 6px 10px; cursor: pointer; font-size: 12px; border-radius: 3px; display: flex; align-items: center; gap: 4px;
+        }
+        .btn:hover { background-color: #444; }
+        .btn.active { background-color: var(--accent); border-color: var(--accent); }
+        .btn-play { background-color: #388e3c; }
+        .btn-stop { background-color: #d32f2f; }
+        
+        /* MAIN LAYOUT */
+        #main-container { display: flex; flex: 1; overflow: hidden; }
+
+        .sidebar { width: 260px; background-color: var(--bg-panel); display: flex; flex-direction: column; border-right: 1px solid var(--border); }
+        .sidebar-right { border-left: 1px solid var(--border); border-right: none; width: 350px; }
+
+        .panel-header {
+            padding: 8px 10px; font-weight: bold; background-color: #2d2d2d; font-size: 11px;
+            text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 1px solid var(--border); border-top: 1px solid var(--border);
+            display: flex; justify-content: space-between; align-items: center;
+        }
+
+        /* SCENE TREE */
+        #scene-tree { flex: 1; overflow-y: auto; }
+        .tree-item { padding: 6px 10px; cursor: pointer; font-size: 13px; display: flex; align-items: center; border-bottom: 1px solid #2a2a2a; }
+        .tree-item:hover { background-color: #3e3e42; }
+        .tree-item.selected { background-color: #094771; color: white; }
+
+        /* VIEWPORT */
+        #viewport { flex: 1; position: relative; background-color: #000; overflow: hidden; }
+        #overlay-ui { position: absolute; top: 10px; left: 10px; pointer-events: none; color: white; text-shadow: 1px 1px 2px black; font-family: monospace; }
+        
+        /* ERROR NOTIFICATION */
+        #error-banner {
+            position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%);
+            background: rgba(244, 67, 54, 0.9); color: white; padding: 10px 20px;
+            border-radius: 4px; display: none; font-family: monospace; z-index: 1000;
+        }
+
+        /* PROPERTIES */
+        .prop-row { display: flex; align-items: center; padding: 6px 10px; border-bottom: 1px solid #333; font-size: 12px; }
+        .prop-label { width: 90px; color: #aaa; }
+        .prop-input { flex: 1; background: #3c3c3c; border: 1px solid var(--border); color: white; padding: 3px; border-radius: 2px; }
+        .prop-slider { flex: 1; cursor: pointer; }
+
+        /* ACE EDITOR CONTAINER */
+        #editor-container { flex: 1; position: relative; }
+        #ace-editor { position: absolute; top: 0; right: 0; bottom: 0; left: 0; font-size: 13px; }
+
+        /* SNIPPETS */
+        #snippet-bar { display: flex; flex-wrap: wrap; gap: 5px; padding: 5px; background: #222; }
+        .snippet-btn { font-size: 10px; padding: 2px 6px; background: #444; border: none; color: #ccc; cursor: pointer; border-radius: 2px; }
+        .snippet-btn:hover { background: var(--accent); color: white; }
+
+    </style>
+</head>
+<body>
+
+    <!-- TOOLBAR -->
+    <div id="toolbar">
+        <span style="font-weight:900; color: #fff; margin-right: 10px;">⚡ ENGINE V3</span>
+        
+        <button class="btn active" id="tool-translate" onclick="setTransformMode('translate')">Move</button>
+        <button class="btn" id="tool-rotate" onclick="setTransformMode('rotate')">Rotate</button>
+        <button class="btn" id="tool-scale" onclick="setTransformMode('scale')">Scale</button>
+        
+        <div style="width:1px; height:20px; background:#555;"></div>
+
+        <button class="btn" onclick="toggleSnap()" id="btn-snap" title="Snap to Grid">🧲 Snap</button>
+        <button class="btn" onclick="toggleSpace()" id="btn-space" title="Global/Local">🌍 Global</button>
+
+        <div style="width:1px; height:20px; background:#555;"></div>
+
+        <select class="prop-input" style="width: 100px;" onchange="addPrimitive(this.value); this.value='Add Shape';">
+            <option hidden>Add Shape</option>
+            <option value="cube">🧊 Cube</option>
+            <option value="sphere">⚪ Sphere</option>
+            <option value="cylinder">🛢 Cylinder</option>
+            <option value="cone">A Cone</option>
+            <option value="plane">⬜ Plane</option>
+            <option value="torus">🍩 Torus</option>
+        </select>
+
+        <div style="flex:1"></div>
+        <span id="save-status" style="font-size: 10px; color: #888; margin-right: 10px;">Autosave: Ready</span>
+        <button class="btn" onclick="toggleFullscreen()">📺 Fullscreen</button>
+        <button class="btn btn-play" id="play-btn">▶ PLAY</button>
+        <button class="btn btn-stop" id="stop-btn" style="display:none;">⏹ STOP</button>
+    </div>
+
+    <!-- MAIN -->
+    <div id="main-container">
+        
+        <!-- HIERARCHY & SETTINGS -->
+        <div class="sidebar">
+            <div class="panel-header">Hierarchy</div>
+            <div id="scene-tree"></div>
+            
+            <div class="panel-header">Environment</div>
+            <div class="prop-row">
+                <span class="prop-label">Sun Intensity</span>
+                <input type="range" class="prop-slider" min="0" max="2" step="0.1" value="1" oninput="updateEnv('sun', this.value)">
+            </div>
+            <div class="prop-row">
+                <span class="prop-label">Gravity</span>
+                <input type="range" class="prop-slider" min="-20" max="20" step="1" value="-10" oninput="updateEnv('gravity', this.value)">
+            </div>
+        </div>
+
+        <!-- VIEWPORT -->
+        <div id="viewport">
+            <div id="overlay-ui">
+                <div id="mode-display">EDITOR MODE</div>
+                <div style="font-size: 11px; opacity: 0.7;">Click Object to Select<br>WASD to Fly (when Flying)</div>
+            </div>
+            <div id="error-banner"></div>
+        </div>
+
+        <!-- INSPECTOR & SCRIPTING -->
+        <div class="sidebar sidebar-right">
+            <div class="panel-header">Inspector</div>
+            <div id="inspector-content">
+                <div style="padding:10px; color:#666; font-style:italic;">Select an object...</div>
+            </div>
+
+            <!-- SMART EDITOR -->
+            <div class="panel-header">
+                <span>Smart Script</span>
+                <button class="btn" style="padding:2px 6px; height:20px;" onclick="applyScript()">Apply (Ctrl+S)</button>
+            </div>
+            <div id="snippet-bar">
+                <span style="font-size:10px; color:#666;">Helpers:</span>
+                <button class="snippet-btn" onclick="insertSnippet('move')">Move (WASD)</button>
+                <button class="snippet-btn" onclick="insertSnippet('jump')">Jump (Space)</button>
+                <button class="snippet-btn" onclick="insertSnippet('rotate')">Spin</button>
+                <button class="snippet-btn" onclick="insertSnippet('collision')">On Hit</button>
+            </div>
+            <div id="editor-container">
+                <div id="ace-editor"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- EXTERNAL LIBS -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/TransformControls.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/cannon@0.6.2/build/cannon.min.js"></script>
+
+    <script>
+        // ==========================================
+        // 1. ACE EDITOR SETUP (Smart Scripting)
+        // ==========================================
+        const editor = ace.edit("ace-editor");
+        editor.setTheme("ace/theme/monokai");
+        editor.session.setMode("ace/mode/javascript");
+        editor.setFontSize(13);
+        editor.setShowPrintMargin(false);
+
+        // Define Default Script
+        const DEFAULT_SCRIPT = 
+`// Available: self.position, self.rotation
+// Input: Input.isPressed('w')
+
+function initialize(self) {
+    console.log(self.name + " initialized!");
+}
+
+function update(self, delta) {
+    // Write your logic here
+}
+
+function onCollision(self, other) {
+    // Handle collision
+}`;
+
+        // ==========================================
+        // 2. ENGINE CORE
+        // ==========================================
+        const Engine = {
+            entities: new Map(),
+            selectedId: null,
+            isPlaying: false,
+            transformSpace: 'world', // 'world' or 'local'
+            snapEnabled: false,
+            idCounter: 0
+        };
+
+        const Input = { keys: {} };
+        window.addEventListener('keydown', e => Input.keys[e.key.toLowerCase()] = true);
+        window.addEventListener('keyup', e => Input.keys[e.key.toLowerCase()] = false);
+        Input.isPressed = (k) => Input.keys[k.toLowerCase()];
+
+        // Three.js & Physics Setup
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x222222);
+
+        const camera = new THREE.PerspectiveCamera(75, 1, 0.1, 1000); // aspect updated later
+        camera.position.set(5, 5, 8);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        document.getElementById('viewport').appendChild(renderer.domElement);
+
+        // Lights
+        const ambLight = new THREE.AmbientLight(0xffffff, 0.5);
+        scene.add(ambLight);
+        const dirLight = new THREE.DirectionalLight(0xffffff, 1);
+        dirLight.position.set(10, 20, 10);
+        dirLight.castShadow = true;
+        scene.add(dirLight);
+
+        // Physics
+        const world = new CANNON.World();
+        world.gravity.set(0, -10, 0);
+        world.broadphase = new CANNON.NaiveBroadphase();
+        const mat = new CANNON.Material();
+        const contactMat = new CANNON.ContactMaterial(mat, mat, { friction: 0.3, restitution: 0.5 });
+        world.addContactMaterial(contactMat);
+
+        // Floor
+        const floorBody = new CANNON.Body({ mass: 0, shape: new CANNON.Plane(), material: mat });
+        floorBody.quaternion.setFromAxisAngle(new CANNON.Vec3(1,0,0), -Math.PI/2);
+        world.addBody(floorBody);
+        const floorMesh = new THREE.GridHelper(50, 50, 0x555555, 0x333333);
+        scene.add(floorMesh);
+
+        // Controls
+        const orbit = new THREE.OrbitControls(camera, renderer.domElement);
+        const transformControl = new THREE.TransformControls(camera, renderer.domElement);
+        transformControl.addEventListener('dragging-changed', e => orbit.enabled = !e.value);
+        transformControl.addEventListener('change', () => {
+             if(Engine.selectedId) syncInspectorToTransform();
+        });
+        scene.add(transformControl);
+
+        // ==========================================
+        // 3. ENTITY SYSTEM
+        // ==========================================
+        class Entity {
+            constructor(name, mesh, body, type) {
+                this.id = 'ent_' + (++Engine.idCounter);
+                this.name = name;
+                this.mesh = mesh;
+                this.body = body;
+                this.type = type;
+                this.script = DEFAULT_SCRIPT;
+                this.instance = null; // Runtime script instance
+                
+                // Store initial state for reset
+                this.startState = {
+                    pos: mesh.position.clone(),
+                    quat: mesh.quaternion.clone(),
+                    mass: body.mass
+                };
+            }
+        }
+
+        function createEntity(type) {
+            let geo, shape;
+            const mat = new THREE.MeshStandardMaterial({ color: Math.random()*0xffffff, roughness: 0.5, metalness: 0.1 });
+            
+            if(type === 'cube') {
+                geo = new THREE.BoxGeometry(1,1,1);
+                shape = new CANNON.Box(new CANNON.Vec3(0.5,0.5,0.5));
+            } else if(type === 'sphere') {
+                geo = new THREE.SphereGeometry(0.5, 32, 32);
+                shape = new CANNON.Sphere(0.5);
+            } else if(type === 'cylinder') {
+                geo = new THREE.CylinderGeometry(0.5, 0.5, 1, 32);
+                shape = new CANNON.Cylinder(0.5, 0.5, 1, 16);
+                // Cannon cylinder orientation fix
+                const q = new CANNON.Quaternion();
+                q.setFromAxisAngle(new CANNON.Vec3(1,0,0),-Math.PI/2);
+                shape.transformAllPoints(new CANNON.Vec3(),q);
+            } else if(type === 'cone') {
+                geo = new THREE.ConeGeometry(0.5, 1, 32);
+                shape = new CANNON.Cylinder(0, 0.5, 1, 16); // Approx cone with cylinder
+            } else if(type === 'plane') {
+                geo = new THREE.PlaneGeometry(2,2);
+                mat.side = THREE.DoubleSide;
+                shape = new CANNON.Box(new CANNON.Vec3(1, 1, 0.05)); // Thin box
+            } else if(type === 'torus') {
+                geo = new THREE.TorusGeometry(0.5, 0.2, 16, 100);
+                shape = new CANNON.Sphere(0.7); // Simple collider approximation
+            }
+
+            const mesh = new THREE.Mesh(geo, mat);
+            mesh.castShadow = true;
+            mesh.receiveShadow = true;
+            mesh.position.y = 2;
+
+            const body = new CANNON.Body({ mass: (type==='plane'?0:1), shape: shape, material: mat });
+            body.position.set(0, 2, 0);
+
+            scene.add(mesh);
+            world.addBody(body);
+
+            const ent = new Entity(type.charAt(0).toUpperCase() + type.slice(1), mesh, body, type);
+            Engine.entities.set(ent.id, ent);
+            
+            updateTree();
+            selectEntity(ent.id);
+            saveToStorage();
+        }
+
+        function addPrimitive(type) {
+            if(type && type !== 'Add Shape') createEntity(type);
+        }
+
+        // ==========================================
+        // 4. LOGIC & SCRIPTING
+        // ==========================================
+
+        function applyScript() {
+            if(!Engine.selectedId) return;
+            const ent = Engine.entities.get(Engine.selectedId);
+            ent.script = editor.getValue();
+            saveToStorage();
+            
+            // Flash editor to show save success
+            const el = document.getElementById('ace-editor');
+            el.style.opacity = "0.5";
+            setTimeout(() => el.style.opacity = "1", 200);
+        }
+
+        function compileEntity(ent) {
+            try {
+                // Safe-ish factory
+                const factory = new Function('Input', 'THREE', 
+                    ent.script + 
+                    '\nreturn { initialize: typeof initialize!=="undefined"?initialize:null, update: typeof update!=="undefined"?update:null, onCollision: typeof onCollision!=="undefined"?onCollision:null };'
+                );
+                
+                ent.instance = factory(Input, THREE);
+                
+                const api = getAPI(ent);
+                if(ent.instance.initialize) ent.instance.initialize(api);
+
+            } catch(e) {
+                showError(`Syntax Error in ${ent.name}: ${e.message}`);
+                ent.instance = null;
+            }
+        }
+
+        function getAPI(ent) {
+            return {
+                id: ent.id,
+                name: ent.name,
+                position: ent.body.position,
+                rotation: ent.mesh.rotation,
+                // Physics helpers
+                applyForce: (x,y,z) => ent.body.applyForce(new CANNON.Vec3(x,y,z), ent.body.position),
+                setVelocity: (x,y,z) => ent.body.velocity.set(x,y,z),
+                setRotation: (x,y,z) => {
+                    ent.body.quaternion.setFromEuler(x, y, z);
+                },
+                log: (msg) => console.log(`[${ent.name}] ${msg}`)
+            };
+        }
+
+        function showError(msg) {
+            const ban = document.getElementById('error-banner');
+            ban.innerText = "⚠️ " + msg;
+            ban.style.display = 'block';
+            setTimeout(() => ban.style.display = 'none', 5000);
+            
+            // Auto Stop if critical
+            if(Engine.isPlaying) togglePlay();
+        }
+
+        // Snippet Helpers
+        function insertSnippet(type) {
+            let code = "";
+            if(type === 'move') code = `\n// Move with WASD\nif(Input.isPressed('w')) self.applyForce(0, 0, -5);\nif(Input.isPressed('s')) self.applyForce(0, 0, 5);\nif(Input.isPressed('a')) self.applyForce(-5, 0, 0);\nif(Input.isPressed('d')) self.applyForce(5, 0, 0);\n`;
+            if(type === 'jump') code = `\n// Jump on Space\nif(Input.isPressed(' ')) self.setVelocity(self.body.velocity.x, 5, self.body.velocity.z);\n`;
+            if(type === 'rotate') code = `\n// Spin\nself.rotation.y += delta * 2;\n`;
+            if(type === 'collision') code = `\nfunction onCollision(self, other) {\n    console.log("Hit " + other.name);\n}\n`;
+            
+            editor.insert(code);
+        }
+
+        // ==========================================
+        // 5. EDITOR UI
+        // ==========================================
+
+        function updateTree() {
+            const tree = document.getElementById('scene-tree');
+            tree.innerHTML = '';
+            Engine.entities.forEach(ent => {
+                const el = document.createElement('div');
+                el.className = `tree-item ${Engine.selectedId === ent.id ? 'selected' : ''}`;
+                el.innerHTML = `<span>📦 ${ent.name}</span>`;
+                el.onclick = () => selectEntity(ent.id);
+                tree.appendChild(el);
+            });
+        }
+
+        function selectEntity(id) {
+            Engine.selectedId = id;
+            const ent = Engine.entities.get(id);
+            
+            updateTree();
+            transformControl.attach(ent.mesh);
+            editor.setValue(ent.script, -1); // -1 moves cursor to start
+            
+            renderInspector(ent);
+        }
+
+        function renderInspector(ent) {
+            const div = document.getElementById('inspector-content');
+            div.innerHTML = '';
+            
+            const createRow = (label, input) => {
+                const r = document.createElement('div');
+                r.className = 'prop-row';
+                r.innerHTML = `<span class="prop-label">${label}</span>`;
+                r.appendChild(input);
+                div.appendChild(r);
+            };
+
+            // Name
+            const inpName = document.createElement('input');
+            inpName.className = 'prop-input';
+            inpName.value = ent.name;
+            inpName.onchange = (e) => { ent.name = e.target.value; updateTree(); };
+            createRow('Name', inpName);
+
+            // Color
+            const inpCol = document.createElement('input');
+            inpCol.type = 'color';
+            inpCol.className = 'prop-input';
+            inpCol.value = '#' + ent.mesh.material.color.getHexString();
+            inpCol.onchange = (e) => ent.mesh.material.color.set(e.target.value);
+            createRow('Color', inpCol);
+
+            // Roughness (PBR)
+            const inpRough = document.createElement('input');
+            inpRough.type = 'range'; inpRough.className = 'prop-slider';
+            inpRough.min = 0; inpRough.max = 1; inpRough.step = 0.01;
+            inpRough.value = ent.mesh.material.roughness;
+            inpRough.oninput = (e) => ent.mesh.material.roughness = parseFloat(e.target.value);
+            createRow('Roughness', inpRough);
+
+            // Metalness (PBR)
+            const inpMetal = document.createElement('input');
+            inpMetal.type = 'range'; inpMetal.className = 'prop-slider';
+            inpMetal.min = 0; inpMetal.max = 1; inpMetal.step = 0.01;
+            inpMetal.value = ent.mesh.material.metalness;
+            inpMetal.oninput = (e) => ent.mesh.material.metalness = parseFloat(e.target.value);
+            createRow('Metalness', inpMetal);
+
+            // Mass
+            const inpMass = document.createElement('input');
+            inpMass.type = 'number'; inpMass.className = 'prop-input';
+            inpMass.value = ent.body.mass;
+            inpMass.onchange = (e) => { 
+                ent.body.mass = parseFloat(e.target.value);
+                ent.body.updateMassProperties();
+            };
+            createRow('Mass (kg)', inpMass);
+
+            // Delete
+            const btnDel = document.createElement('button');
+            btnDel.className = 'btn';
+            btnDel.style.backgroundColor = '#d32f2f';
+            btnDel.innerText = "Delete Object";
+            btnDel.style.width = '100%';
+            btnDel.style.marginTop = '10px';
+            btnDel.onclick = () => deleteEntity(ent.id);
+            div.appendChild(btnDel);
+        }
+
+        function deleteEntity(id) {
+            const ent = Engine.entities.get(id);
+            scene.remove(ent.mesh);
+            world.removeBody(ent.body);
+            transformControl.detach();
+            Engine.entities.delete(id);
+            Engine.selectedId = null;
+            document.getElementById('inspector-content').innerHTML = '<div style="padding:10px; color:#666;">Select an object...</div>';
+            editor.setValue("");
+            updateTree();
+            saveToStorage();
+        }
+
+        // ==========================================
+        // 6. TOOLBAR & HELPERS
+        // ==========================================
+
+        function setTransformMode(mode) {
+            transformControl.setMode(mode);
+            document.querySelectorAll('#toolbar .btn').forEach(b => b.classList.remove('active'));
+            document.getElementById('tool-'+mode).classList.add('active');
+        }
+
+        function toggleSnap() {
+            Engine.snapEnabled = !Engine.snapEnabled;
+            transformControl.setTranslationSnap(Engine.snapEnabled ? 1 : null);
+            transformControl.setRotationSnap(Engine.snapEnabled ? Math.PI/4 : null);
+            document.getElementById('btn-snap').classList.toggle('active');
+        }
+
+        function toggleSpace() {
+            Engine.transformSpace = Engine.transformSpace === 'world' ? 'local' : 'world';
+            transformControl.setSpace(Engine.transformSpace);
+            document.getElementById('btn-space').innerText = Engine.transformSpace === 'world' ? '🌍 Global' : '📍 Local';
+        }
+
+        function updateEnv(type, val) {
+            if(type === 'sun') dirLight.intensity = parseFloat(val);
+            if(type === 'gravity') world.gravity.set(0, parseFloat(val), 0);
+        }
+
+        function toggleFullscreen() {
+            const vp = document.getElementById('viewport');
+            if(!document.fullscreenElement) {
+                vp.requestFullscreen().catch(err => alert(`Error: ${err.message}`));
+            } else {
+                document.exitFullscreen();
+            }
+        }
+
+        function syncInspectorToTransform() {
+            // Placeholder: Ideally updates position inputs in inspector if they existed
+        }
+
+        // ==========================================
+        // 7. AUTO-SAVE SYSTEM (LocalStorage)
+        // ==========================================
+
+        function saveToStorage() {
+            const data = [];
+            Engine.entities.forEach(ent => {
+                data.push({
+                    type: ent.type,
+                    name: ent.name,
+                    pos: ent.mesh.position.toArray(),
+                    quat: ent.mesh.quaternion.toArray(),
+                    mass: ent.body.mass,
+                    color: ent.mesh.material.color.getHexString(),
+                    props: { r: ent.mesh.material.roughness, m: ent.mesh.material.metalness },
+                    script: ent.script
+                });
+            });
+            localStorage.setItem('web3d_scene', JSON.stringify(data));
+            
+            const el = document.getElementById('save-status');
+            el.innerText = "Saved: " + new Date().toLocaleTimeString();
+        }
+
+        function loadFromStorage() {
+            const json = localStorage.getItem('web3d_scene');
+            if(!json) {
+                // Default Scene
+                createEntity('cube'); 
+                return;
+            }
+            const data = JSON.parse(json);
+            data.forEach(d => {
+                // Reconstruct
+                let geo, shape;
+                const mat = new THREE.MeshStandardMaterial({ 
+                    color: '#' + d.color, 
+                    roughness: d.props ? d.props.r : 0.5, 
+                    metalness: d.props ? d.props.m : 0.1 
+                });
+                
+                // (Simplified reconstruction logic - reuses createEntity logic partially)
+                // Ideally we refactor createEntity to accept params, but for single file:
+                if(d.type === 'cube') { geo = new THREE.BoxGeometry(1,1,1); shape = new CANNON.Box(new CANNON.Vec3(0.5,0.5,0.5)); }
+                else if(d.type === 'sphere') { geo = new THREE.SphereGeometry(0.5,32,32); shape = new CANNON.Sphere(0.5); }
+                else if(d.type === 'plane') { geo = new THREE.PlaneGeometry(2,2); mat.side=2; shape = new CANNON.Box(new CANNON.Vec3(1,1,0.05)); }
+                else { geo = new THREE.BoxGeometry(1,1,1); shape = new CANNON.Box(new CANNON.Vec3(0.5,0.5,0.5)); } // Fallback
+
+                const mesh = new THREE.Mesh(geo, mat);
+                mesh.position.fromArray(d.pos);
+                mesh.quaternion.fromArray(d.quat);
+                mesh.castShadow = true;
+
+                const body = new CANNON.Body({ mass: d.mass, shape: shape });
+                body.position.copy(mesh.position);
+                body.quaternion.copy(mesh.quaternion);
+
+                scene.add(mesh);
+                world.addBody(body);
+
+                const ent = new Entity(d.name, mesh, body, d.type);
+                ent.script = d.script;
+                Engine.entities.set(ent.id, ent);
+            });
+            updateTree();
+        }
+
+        // ==========================================
+        // 8. GAME LOOP
+        // ==========================================
+        
+        const btnPlay = document.getElementById('play-btn');
+        const btnStop = document.getElementById('stop-btn');
+
+        function togglePlay() {
+            Engine.isPlaying = !Engine.isPlaying;
+            
+            if(Engine.isPlaying) {
+                // Start
+                btnPlay.style.display = 'none';
+                btnStop.style.display = 'flex';
+                document.getElementById('mode-display').innerText = "PLAYING";
+                document.getElementById('mode-display').style.color = "#4ec9b0";
+                transformControl.detach();
+
+                // Compile All
+                Engine.entities.forEach(ent => compileEntity(ent));
+
+            } else {
+                // Stop
+                btnPlay.style.display = 'flex';
+                btnStop.style.display = 'none';
+                document.getElementById('mode-display').innerText = "EDITOR MODE";
+                document.getElementById('mode-display').style.color = "white";
+
+                // Reset State
+                Engine.entities.forEach(ent => {
+                    ent.body.velocity.set(0,0,0);
+                    ent.body.angularVelocity.set(0,0,0);
+                    ent.mesh.position.copy(ent.startState.pos);
+                    ent.mesh.quaternion.copy(ent.startState.quat);
+                    ent.body.position.copy(ent.startState.pos);
+                    ent.body.quaternion.copy(ent.startState.quat);
+                    ent.instance = null;
+                });
+            }
+        }
+
+        btnPlay.onclick = togglePlay;
+        btnStop.onclick = togglePlay;
+
+        // Loop
+        function animate() {
+            requestAnimationFrame(animate);
+            
+            // Resize
+            const vp = document.getElementById('viewport');
+            if(renderer.domElement.width !== vp.clientWidth || renderer.domElement.height !== vp.clientHeight) {
+                renderer.setSize(vp.clientWidth, vp.clientHeight);
+                camera.aspect = vp.clientWidth / vp.clientHeight;
+                camera.updateProjectionMatrix();
+            }
+
+            if(Engine.isPlaying) {
+                world.step(1/60);
+                Engine.entities.forEach(ent => {
+                    // Sync Physics -> Visuals
+                    ent.mesh.position.copy(ent.body.position);
+                    ent.mesh.quaternion.copy(ent.body.quaternion);
+                    
+                    // Run Script Update
+                    if(ent.instance && ent.instance.update) {
+                        try {
+                            ent.instance.update(getAPI(ent), 1/60);
+                        } catch(e) {
+                            showError(`Runtime Error in ${ent.name}: ${e.message}`);
+                            ent.instance = null; // Disable broken script
+                        }
+                    }
+                });
+            } else {
+                // Editor Mode: Sync Visuals -> Physics (for Transform Gizmo)
+                 Engine.entities.forEach(ent => {
+                    ent.body.position.copy(ent.mesh.position);
+                    ent.body.quaternion.copy(ent.mesh.quaternion);
+                 });
+            }
+
+            renderer.render(scene, camera);
+        }
+
+        // Init
+        loadFromStorage();
+        animate();
+
+        // Keyboard Shortcuts
+        window.addEventListener('keydown', e => {
+            if(e.ctrlKey && e.key === 's') { e.preventDefault(); applyScript(); }
+        });
+
+    </script>
+</body>
+</html>
+
+
+
