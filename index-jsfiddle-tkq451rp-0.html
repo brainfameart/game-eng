@@ -1,0 +1,862 @@
+<!DOCTYPE html>
+<html>
+
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>JSFiddle tkq451rp</title>
+
+  <style>
+    
+  </style>
+
+  
+</head>
+<body>
+  <!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Eclipse Tiles - Cinematic Puzzle Game</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700&family=Montserrat:wght@400;600;700&display=swap" rel="stylesheet">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+    html, body { width: 100%; height: 100%; overflow: hidden; }
+    body { font-family: 'Montserrat', system-ui, sans-serif; background: #0B0F2A; color: white; }
+    #app { width: 100%; height: 100%; }
+    
+    /* GSAP-compatible animations */
+    .glow-gold { text-shadow: 0 0 40px rgba(255, 215, 0, 0.5), 0 0 80px rgba(255, 215, 0, 0.3); }
+    .btn { border: none; cursor: pointer; transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1); -webkit-user-select: none; user-select: none; }
+    .btn:hover { transform: scale(1.05); }
+    .btn:active { transform: scale(0.95); }
+    
+    .tile { border-radius: 12px; border: none; cursor: pointer; position: relative; overflow: hidden; transition: all 0.15s cubic-bezier(0.34, 1.56, 0.64, 1); }
+    .tile:hover { transform: scale(1.05); }
+    .tile.selected { transform: scale(1.15); z-index: 10; }
+    .tile .shine { position: absolute; inset: 0; background: linear-gradient(135deg, rgba(255,255,255,0.5) 0%, transparent 40%); }
+    .tile .ice { position: absolute; inset: 0; background: rgba(200, 230, 255, 0.5); backdrop-filter: blur(2px); display: flex; align-items: center; justify-content: center; }
+    .tile .special { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 1.25rem; }
+    .tile .bomb-timer { position: absolute; bottom: 2px; right: 2px; font-size: 0.6rem; font-weight: bold; color: #FF6B6B; }
+    .tile .lava { position: absolute; inset: 0; background: linear-gradient(135deg, rgba(255,100,50,0.6), rgba(255,50,0,0.4)); animation: lava-pulse 1s infinite; }
+    .tile .fog { position: absolute; inset: 0; background: rgba(100,100,150,0.8); backdrop-filter: blur(4px); }
+    .tile .jelly { position: absolute; inset: 0; background: rgba(150,50,200,0.4); animation: jelly-wobble 2s infinite; }
+    
+    @keyframes lava-pulse { 0%, 100% { opacity: 0.6; } 50% { opacity: 0.9; } }
+    @keyframes jelly-wobble { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.05); } }
+    @keyframes particle-burst { 0% { transform: scale(1); opacity: 1; } 100% { transform: scale(0) translate(var(--tx), var(--ty)); opacity: 0; } }
+    @keyframes star-pop { 0% { transform: scale(0); } 50% { transform: scale(1.3); } 100% { transform: scale(1); } }
+    @keyframes combo-pop { 0%, 100% { transform: scale(1) translateX(-50%); } 50% { transform: scale(1.2) translateX(-50%); } }
+    @keyframes shake { 0%, 100% { transform: translateX(0); } 25% { transform: translateX(-5px); } 75% { transform: translateX(5px); } }
+    @keyframes float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-10px); } }
+    
+    .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.85); display: flex; align-items: center; justify-content: center; z-index: 100; padding: 1rem; }
+    .modal { max-width: 380px; width: 100%; padding: 2rem; border-radius: 1.5rem; text-align: center; background: linear-gradient(180deg, #1A1F45 0%, #0B0F2A 100%); }
+    
+    .star-bar { position: relative; height: 32px; background: rgba(255,255,255,0.1); border-radius: 9999px; overflow: visible; }
+    .star-bar .fill { height: 100%; border-radius: 9999px; background: linear-gradient(90deg, #6BCB77, #FFD93D, #FF6B6B); transition: width 0.5s ease-out; box-shadow: 0 0 20px rgba(255, 215, 0, 0.5); }
+    .star-bar .star-marker { position: absolute; top: 50%; transform: translate(-50%, -50%); font-size: 1.25rem; transition: all 0.3s; }
+    .star-bar .star-marker.earned { animation: star-pop 0.5s ease-out; }
+    
+    .particle { position: absolute; width: 8px; height: 8px; border-radius: 50%; pointer-events: none; animation: particle-burst 0.6s ease-out forwards; }
+    .combo-display { position: fixed; top: 30%; left: 50%; transform: translateX(-50%); padding: 0.75rem 1.5rem; border-radius: 9999px; font-weight: bold; font-size: 1.5rem; background: linear-gradient(135deg, #FFD700, #FF6B6B); color: #0B0F2A; box-shadow: 0 0 30px rgba(255, 215, 0, 0.6); animation: combo-pop 0.5s ease-out; z-index: 50; }
+    
+    .level-btn { width: 64px; height: 64px; border-radius: 50%; display: flex; flex-direction: column; align-items: center; justify-content: center; font-weight: bold; color: white; border: 2px solid; cursor: pointer; transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1); }
+    .level-btn:hover { transform: scale(1.1); }
+    .level-btn.locked { background: rgba(58, 63, 107, 0.3); border-color: rgba(255,255,255,0.1); cursor: not-allowed; }
+    
+    .hint-btn { position: fixed; bottom: 20px; right: 20px; width: 50px; height: 50px; border-radius: 50%; background: linear-gradient(135deg, #4D96FF, #6BCB77); border: none; color: white; font-size: 1.5rem; cursor: pointer; box-shadow: 0 4px 20px rgba(77, 150, 255, 0.4); z-index: 40; }
+    .hint-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    
+    .challenge-badge { position: absolute; top: 10px; left: 50%; transform: translateX(-50%); padding: 0.25rem 0.75rem; border-radius: 9999px; font-size: 0.75rem; font-weight: bold; background: linear-gradient(135deg, #FF6B6B, #FFD93D); color: #0B0F2A; z-index: 20; }
+    
+    .water-overlay { position: absolute; bottom: 0; left: 0; right: 0; background: linear-gradient(0deg, rgba(50,150,255,0.6) 0%, transparent 100%); pointer-events: none; transition: height 0.5s ease-out; }
+    
+    .heat-meter { position: absolute; top: 60px; right: 10px; width: 20px; height: 150px; background: rgba(0,0,0,0.3); border-radius: 10px; overflow: hidden; }
+    .heat-meter .fill { position: absolute; bottom: 0; width: 100%; background: linear-gradient(0deg, #FF6B6B, #FFD93D); transition: height 0.3s; }
+    
+    @media (max-width: 400px) { .level-btn { width: 56px; height: 56px; font-size: 1rem; } }
+  </style>
+</head>
+<body>
+  <div id="app"></div>
+  <script>
+    // Game Configuration
+    const GRID_SIZE = 8;
+    const TOTAL_LEVELS = 500;
+    const TILE_COLORS = [
+      { name: 'red', color: '#FF6B6B', gradient: ['#FF6B6B', '#FF4757'] },
+      { name: 'blue', color: '#4D96FF', gradient: ['#4D96FF', '#3742fa'] },
+      { name: 'green', color: '#6BCB77', gradient: ['#6BCB77', '#2ed573'] },
+      { name: 'yellow', color: '#FFD93D', gradient: ['#FFD93D', '#ffa502'] },
+      { name: 'purple', color: '#C9B1FF', gradient: ['#C9B1FF', '#a55eea'] },
+    ];
+    const LEVEL_COLORS = ['#FF6B6B', '#4D96FF', '#6BCB77', '#FFD93D', '#C9B1FF', '#FF8E53', '#00D9FF', '#FF6B9D', '#7BED9F', '#FFA502'];
+    const THEMES = [
+      { id: 'midnight', colors: ['#0A0A0A', '#1A1A2E'], accent: '#FFD700' },
+      { id: 'galaxy', colors: ['#0F2A45', '#1A1F45'], accent: '#00D9FF' },
+      { id: 'sunset', colors: ['#2D1B3D', '#FF7743'], accent: '#FF6B6B' },
+      { id: 'royal', colors: ['#1A0A2E', '#4A0EFF'], accent: '#C9B1FF' },
+    ];
+    
+    // Challenge Types
+    const CHALLENGE_TYPES = ['normal', 'timed', 'ice', 'bomb', 'lava', 'water', 'jelly', 'fog', 'rescue', 'collect'];
+    
+    // State
+    let state = {
+      screen: 'home',
+      level: 1,
+      board: [],
+      selected: null,
+      score: 0,
+      moves: 0,
+      timeLeft: 0,
+      gameStatus: 'playing',
+      animating: false,
+      combo: 0,
+      showCombo: false,
+      progress: { unlockedLevel: 1, stars: {} },
+      showTutorial: false,
+      tutorialStep: 0,
+      settings: { theme: 'galaxy', soundEnabled: true, musicEnabled: true, quality: 'Medium' },
+      hintCooldown: 0,
+      challenge: null,
+      waterLevel: 0,
+      heatLevel: 0,
+      rescued: 0,
+      collected: 0,
+    };
+    
+    // Star Progression Formula
+    const getStarThresholds = (level) => ({
+      s1: 100 + (level * 10),
+      s2: 200 + (level * 15),
+      s3: 300 + (level * 25),
+    });
+    
+    const getTileSize = () => Math.min(44, (window.innerWidth - 48) / GRID_SIZE - 6);
+    const getMoves = (level) => Math.max(12, 35 - Math.floor(level / 20));
+    const getTimeLimit = (level) => Math.max(30, 120 - Math.floor(level / 10) * 5);
+    
+    const getLevelType = (level) => {
+      if (level <= 10) return 'normal';
+      const types = ['normal', 'timed', 'ice', 'bomb', 'lava', 'water', 'jelly', 'fog', 'rescue', 'collect'];
+      return types[(level % 10)];
+    };
+    
+    const getLevelColor = (level) => LEVEL_COLORS[Math.floor((level - 1) / 50) % LEVEL_COLORS.length];
+    const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+    
+    const getRandomTile = (levelType) => {
+      const tile = {
+        colorType: TILE_COLORS[Math.floor(Math.random() * TILE_COLORS.length)].name,
+        special: null,
+        ice: levelType === 'ice' && Math.random() < 0.3 ? 1 : 0,
+        bomb: levelType === 'bomb' && Math.random() < 0.15 ? 5 + Math.floor(Math.random() * 5) : 0,
+        lava: levelType === 'lava' && Math.random() < 0.1,
+        jelly: levelType === 'jelly' && Math.random() < 0.2,
+        fog: levelType === 'fog' && Math.random() < 0.4,
+        rescue: false,
+        collectible: levelType === 'collect' && Math.random() < 0.1,
+        id: Math.random().toString(36).substr(2, 9),
+      };
+      return tile;
+    };
+    
+    const checkMatch = (board, row, col, colorType) => {
+      if (!colorType) return false;
+      let h = 1, v = 1;
+      for (let c = col - 1; c >= 0 && board[row][c]?.colorType === colorType; c--) h++;
+      for (let c = col + 1; c < GRID_SIZE && board[row][c]?.colorType === colorType; c++) h++;
+      if (h >= 3) return true;
+      for (let r = row - 1; r >= 0 && board[r][col]?.colorType === colorType; r--) v++;
+      for (let r = row + 1; r < GRID_SIZE && board[r][col]?.colorType === colorType; r++) v++;
+      return v >= 3;
+    };
+    
+    const initBoard = (levelType) => {
+      const board = Array(GRID_SIZE).fill(null).map(() => Array(GRID_SIZE).fill(null));
+      for (let r = 0; r < GRID_SIZE; r++) {
+        for (let c = 0; c < GRID_SIZE; c++) {
+          let tile, attempts = 0;
+          do {
+            tile = getRandomTile(levelType);
+            board[r][c] = tile;
+            attempts++;
+          } while (checkMatch(board, r, c, tile.colorType) && attempts < 100);
+        }
+      }
+      // Add rescue objects for rescue missions
+      if (levelType === 'rescue') {
+        const rescuePositions = [[0, 3], [0, 4], [1, 2], [1, 5]];
+        rescuePositions.forEach(([r, c]) => {
+          if (board[r][c]) board[r][c].rescue = true;
+        });
+      }
+      return board;
+    };
+    
+    const findMatches = (board) => {
+      const groups = [];
+      for (let r = 0; r < GRID_SIZE; r++) {
+        for (let c = 0; c < GRID_SIZE - 2; c++) {
+          const tile = board[r][c];
+          if (!tile) continue;
+          const group = [{ r, c }];
+          let cc = c + 1;
+          while (cc < GRID_SIZE && board[r][cc]?.colorType === tile.colorType) {
+            group.push({ r, c: cc });
+            cc++;
+          }
+          if (group.length >= 3) {
+            groups.push({ type: 'h', cells: group, color: tile.colorType });
+            c = cc - 1;
+          }
+        }
+      }
+      for (let c = 0; c < GRID_SIZE; c++) {
+        for (let r = 0; r < GRID_SIZE - 2; r++) {
+          const tile = board[r][c];
+          if (!tile) continue;
+          const group = [{ r, c }];
+          let rr = r + 1;
+          while (rr < GRID_SIZE && board[rr][c]?.colorType === tile.colorType) {
+            group.push({ r: rr, c });
+            rr++;
+          }
+          if (group.length >= 3) {
+            groups.push({ type: 'v', cells: group, color: tile.colorType });
+            r = rr - 1;
+          }
+        }
+      }
+      return groups;
+    };
+    
+    const processMatches = async () => {
+      let hasMatches = true;
+      let totalCombo = 0;
+      const levelType = getLevelType(state.level);
+      
+      while (hasMatches) {
+        const groups = findMatches(state.board);
+        if (groups.length === 0) { hasMatches = false; break; }
+        
+        totalCombo++;
+        if (totalCombo > 1) {
+          state.combo = totalCombo;
+          state.showCombo = true;
+          render();
+          setTimeout(() => { state.showCombo = false; render(); }, 800);
+        }
+        
+        const matched = new Set();
+        groups.forEach(g => {
+          g.cells.forEach(cell => matched.add(cell.r + ',' + cell.c));
+          if (g.cells.length === 4) {
+            const last = g.cells[g.cells.length - 1];
+            if (state.board[last.r][last.c]) {
+              state.board[last.r][last.c].special = 'rowClear';
+              matched.delete(last.r + ',' + last.c);
+            }
+          } else if (g.cells.length >= 5) {
+            const last = g.cells[g.cells.length - 1];
+            if (state.board[last.r][last.c]) {
+              state.board[last.r][last.c].special = 'colorBomb';
+              matched.delete(last.r + ',' + last.c);
+            }
+          }
+        });
+        
+        // Calculate score based on new formula
+        let baseScore = 0;
+        for (const key of matched) {
+          const [r, c] = key.split(',').map(Number);
+          const tile = state.board[r][c];
+          if (tile) {
+            if (tile.ice > 0) {
+              state.board[r][c] = { ...tile, ice: 0 };
+              matched.delete(key);
+              baseScore += 5;
+            } else if (tile.collectible) {
+              state.collected++;
+              baseScore += 25;
+            } else if (tile.rescue) {
+              state.rescued++;
+              baseScore += 100;
+            } else if (tile.special === 'rowClear') {
+              for (let cc = 0; cc < GRID_SIZE; cc++) {
+                if (state.board[r][cc]) baseScore += 20;
+                state.board[r][cc] = null;
+              }
+            } else if (tile.special === 'colorBomb') {
+              const targetColor = tile.colorType;
+              for (let rr = 0; rr < GRID_SIZE; rr++) {
+                for (let cc = 0; cc < GRID_SIZE; cc++) {
+                  if (state.board[rr][cc]?.colorType === targetColor) {
+                    baseScore += 15;
+                    state.board[rr][cc] = null;
+                  }
+                }
+              }
+            } else {
+              baseScore += tile.jelly ? 15 : tile.lava ? 20 : 10;
+            }
+          }
+        }
+        
+        // Combo multiplier
+        const comboMultiplier = totalCombo > 1 ? 1 + (totalCombo * 0.5) : 1;
+        state.score += Math.floor(baseScore * comboMultiplier);
+        
+        matched.forEach(key => {
+          const [r, c] = key.split(',').map(Number);
+          state.board[r][c] = null;
+        });
+        
+        render();
+        await sleep(150);
+        
+        // Gravity
+        for (let c = 0; c < GRID_SIZE; c++) {
+          let emptyRow = GRID_SIZE - 1;
+          for (let r = GRID_SIZE - 1; r >= 0; r--) {
+            if (state.board[r][c]) {
+              if (r !== emptyRow) {
+                state.board[emptyRow][c] = state.board[r][c];
+                state.board[r][c] = null;
+              }
+              emptyRow--;
+            }
+          }
+        }
+        render();
+        await sleep(150);
+        
+        // Refill
+        for (let c = 0; c < GRID_SIZE; c++) {
+          for (let r = 0; r < GRID_SIZE; r++) {
+            if (!state.board[r][c]) {
+              let tile, attempts = 0;
+              do {
+                tile = getRandomTile(levelType);
+                tile.rescue = false;
+                tile.collectible = levelType === 'collect' && Math.random() < 0.05;
+                state.board[r][c] = tile;
+                attempts++;
+              } while (checkMatch(state.board, r, c, tile.colorType) && attempts < 50);
+            }
+          }
+        }
+        render();
+        await sleep(150);
+      }
+      
+      return totalCombo > 0;
+    };
+    
+    const handleTileClick = async (r, c) => {
+      if (state.animating || state.gameStatus !== 'playing') return;
+      
+      if (state.showTutorial) {
+        if (state.tutorialStep === 0 && r === 3 && c === 3) {
+          state.tutorialStep = 1;
+          state.selected = { r, c };
+          render();
+          return;
+        } else if (state.tutorialStep === 1) {
+          state.showTutorial = false;
+        } else return;
+      }
+      
+      // Clear fog on adjacent tiles
+      const levelType = getLevelType(state.level);
+      if (levelType === 'fog') {
+        [[r-1,c],[r+1,c],[r,c-1],[r,c+1]].forEach(([rr,cc]) => {
+          if (rr >= 0 && rr < GRID_SIZE && cc >= 0 && cc < GRID_SIZE && state.board[rr][cc]) {
+            state.board[rr][cc].fog = false;
+          }
+        });
+      }
+      
+      if (!state.selected) {
+        state.selected = { r, c };
+        render();
+        return;
+      }
+      
+      const dx = Math.abs(state.selected.c - c);
+      const dy = Math.abs(state.selected.r - r);
+      
+      if (dx + dy !== 1) {
+        state.selected = { r, c };
+        render();
+        return;
+      }
+      
+      state.animating = true;
+      
+      const temp = state.board[state.selected.r][state.selected.c];
+      state.board[state.selected.r][state.selected.c] = state.board[r][c];
+      state.board[r][c] = temp;
+      render();
+      await sleep(150);
+      
+      const hasMatches = await processMatches();
+      
+      if (!hasMatches) {
+        const temp2 = state.board[state.selected.r][state.selected.c];
+        state.board[state.selected.r][state.selected.c] = state.board[r][c];
+        state.board[r][c] = temp2;
+        render();
+        await sleep(150);
+      } else {
+        state.moves--;
+        
+        // Process bomb timers
+        if (levelType === 'bomb') {
+          for (let rr = 0; rr < GRID_SIZE; rr++) {
+            for (let cc = 0; cc < GRID_SIZE; cc++) {
+              if (state.board[rr][cc]?.bomb > 0) {
+                state.board[rr][cc].bomb--;
+                if (state.board[rr][cc].bomb === 0) {
+                  state.score = Math.max(0, state.score - 50);
+                }
+              }
+            }
+          }
+        }
+        
+        // Spread lava/jelly
+        if (levelType === 'lava') state.heatLevel = Math.min(100, state.heatLevel + 5);
+        if (levelType === 'water') state.waterLevel = Math.min(70, state.waterLevel + 3);
+      }
+      
+      state.selected = null;
+      state.animating = false;
+      checkWinLose();
+      render();
+    };
+    
+    const useHint = () => {
+      if (state.hintCooldown > 0 || state.gameStatus !== 'playing') return;
+      
+      // Find a valid move
+      for (let r = 0; r < GRID_SIZE; r++) {
+        for (let c = 0; c < GRID_SIZE - 1; c++) {
+          const temp = state.board[r][c];
+          state.board[r][c] = state.board[r][c+1];
+          state.board[r][c+1] = temp;
+          if (findMatches(state.board).length > 0) {
+            state.board[r][c+1] = state.board[r][c];
+            state.board[r][c] = temp;
+            state.selected = { r, c };
+            state.hintCooldown = 30;
+            render();
+            const countdown = setInterval(() => {
+              state.hintCooldown--;
+              if (state.hintCooldown <= 0) clearInterval(countdown);
+              render();
+            }, 1000);
+            return;
+          }
+          state.board[r][c+1] = state.board[r][c];
+          state.board[r][c] = temp;
+        }
+      }
+    };
+    
+    const checkWinLose = () => {
+      const thresholds = getStarThresholds(state.level);
+      const levelType = getLevelType(state.level);
+      
+      // Win conditions vary by level type
+      let won = false;
+      if (levelType === 'rescue' && state.rescued >= 4) won = true;
+      else if (levelType === 'collect' && state.collected >= 10) won = true;
+      else if (state.score >= thresholds.s1) won = true;
+      
+      if (won) {
+        const stars = state.score >= thresholds.s3 ? 3 : state.score >= thresholds.s2 ? 2 : 1;
+        if (state.level >= state.progress.unlockedLevel) state.progress.unlockedLevel = state.level + 1;
+        if (!state.progress.stars[state.level] || state.progress.stars[state.level] < stars) {
+          state.progress.stars[state.level] = stars;
+        }
+        localStorage.setItem('eclipseTilesProgress', JSON.stringify(state.progress));
+        state.gameStatus = 'won';
+      } else if (state.moves <= 0 || (levelType === 'timed' && state.timeLeft <= 0) || state.waterLevel >= 70 || state.heatLevel >= 100) {
+        state.gameStatus = 'lost';
+      }
+    };
+    
+    const startLevel = (level) => {
+      const levelType = getLevelType(level);
+      state.level = level;
+      state.screen = 'game';
+      state.board = initBoard(levelType);
+      state.selected = null;
+      state.score = 0;
+      state.moves = getMoves(level);
+      state.timeLeft = levelType === 'timed' ? getTimeLimit(level) : 0;
+      state.gameStatus = 'playing';
+      state.combo = 0;
+      state.showTutorial = level === 1;
+      state.tutorialStep = 0;
+      state.hintCooldown = 0;
+      state.waterLevel = 0;
+      state.heatLevel = 0;
+      state.rescued = 0;
+      state.collected = 0;
+      render();
+      
+      if (levelType === 'timed') {
+        const timer = setInterval(() => {
+          if (state.gameStatus !== 'playing' || state.screen !== 'game') {
+            clearInterval(timer);
+            return;
+          }
+          state.timeLeft--;
+          if (state.timeLeft <= 0) {
+            clearInterval(timer);
+            checkWinLose();
+          }
+          render();
+        }, 1000);
+      }
+    };
+    
+    const loadProgress = () => {
+      const saved = localStorage.getItem('eclipseTilesProgress');
+      if (saved) state.progress = JSON.parse(saved);
+      const settings = localStorage.getItem('eclipseTilesSettings');
+      if (settings) state.settings = JSON.parse(settings);
+    };
+    
+    const getTheme = () => THEMES.find(t => t.id === state.settings.theme) || THEMES[1];
+    
+    // Render Functions
+    const renderHome = () => {
+      const theme = getTheme();
+      return `
+        <div style="min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:20px;background:linear-gradient(180deg, ${theme.colors[0]} 0%, ${theme.colors[1]} 100%);position:relative;">
+          <div style="position:absolute;inset:0;background:radial-gradient(ellipse at center, transparent 40%, rgba(0,0,0,0.6) 100%);pointer-events:none;"></div>
+          <div style="position:relative;z-index:10;text-align:center;max-width:400px;width:100%;">
+            <div style="font-size:4rem;margin-bottom:0.5rem;animation:float 3s ease-in-out infinite;">✨</div>
+            <h1 style="font-family:'Playfair Display',serif;font-size:3.5rem;font-weight:700;color:${theme.accent};margin-bottom:0;" class="glow-gold">Eclipse</h1>
+            <h2 style="font-family:'Playfair Display',serif;font-size:2rem;color:#FFEAA0;letter-spacing:0.3em;margin-bottom:0.5rem;">TILES</h2>
+            <p style="color:rgba(255,255,255,0.5);font-size:0.9rem;margin-bottom:2rem;">A Cinematic Puzzle Experience</p>
+            
+            <div style="display:flex;flex-direction:column;gap:1rem;">
+              <a href="https://PayPal.me/EthanAnyam" target="_blank" class="btn" style="display:flex;align-items:center;justify-content:center;gap:0.75rem;padding:1.25rem 2rem;border-radius:1rem;font-weight:bold;font-size:1.125rem;background:linear-gradient(135deg, #FFD700, #FFA500);color:#0B0F2A;text-decoration:none;box-shadow:0 10px 40px rgba(255, 215, 0, 0.4);">
+                ❤️ SUPPORT ME
+              </a>
+              <button onclick="state.screen='levels';render();" class="btn" style="display:flex;align-items:center;justify-content:center;gap:0.75rem;padding:1rem 2rem;border-radius:1rem;font-weight:bold;font-size:1.125rem;background:linear-gradient(135deg, #3A3F6B, #5E62A8);color:#FFFFFF;border:1px solid rgba(255,255,255,0.2);box-shadow:0 10px 30px rgba(94, 98, 168, 0.3);">
+                ▶️ LEVELS
+              </button>
+              <button onclick="state.screen='settings';render();" class="btn" style="padding:0.75rem 2rem;border-radius:0.75rem;background:rgba(58, 63, 107, 0.5);color:rgba(255,255,255,0.7);border:1px solid rgba(255,255,255,0.1);">
+                ⚙️ Settings
+              </button>
+              <button onclick="state.screen='about';render();" class="btn" style="padding:0.75rem 2rem;border-radius:0.75rem;background:rgba(58, 63, 107, 0.3);color:rgba(255,255,255,0.5);border:1px solid rgba(255,255,255,0.1);">
+                ✨ About
+              </button>
+            </div>
+            
+            <p style="color:rgba(255,255,255,0.3);font-size:0.75rem;margin-top:2rem;">© 2024 Eclipse Tiles by Ethan Anyam</p>
+          </div>
+        </div>
+      `;
+    };
+    
+    const renderSettings = () => {
+      const theme = getTheme();
+      return `
+        <div style="min-height:100vh;display:flex;flex-direction:column;background:linear-gradient(180deg, ${theme.colors[0]} 0%, ${theme.colors[1]} 100%);">
+          <div style="padding:1rem;display:flex;align-items:center;gap:1rem;border-bottom:1px solid rgba(255,255,255,0.1);">
+            <button onclick="state.screen='home';render();" class="btn" style="background:rgba(255,255,255,0.1);width:40px;height:40px;border-radius:0.75rem;color:white;">←</button>
+            <h1 style="color:${theme.accent};font-size:1.5rem;font-weight:bold;">Settings</h1>
+          </div>
+          <div style="flex:1;overflow-y:auto;padding:1rem;">
+            <div style="background:rgba(255,255,255,0.05);border-radius:1rem;padding:1rem;margin-bottom:1rem;border:1px solid rgba(255,255,255,0.1);">
+              <h3 style="color:white;margin-bottom:1rem;">🎨 Theme</h3>
+              <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:0.5rem;">
+                ${THEMES.map(t => `
+                  <button onclick="state.settings.theme='${t.id}';localStorage.setItem('eclipseTilesSettings',JSON.stringify(state.settings));render();" class="btn" style="padding:0.75rem;border-radius:0.75rem;background:linear-gradient(135deg,${t.colors[0]},${t.colors[1]});border:2px solid ${state.settings.theme===t.id?'white':'transparent'};">
+                    <div style="width:20px;height:20px;border-radius:50%;background:${t.accent};margin:0 auto 0.5rem;box-shadow:0 0 10px ${t.accent};"></div>
+                    <span style="color:white;font-size:0.75rem;">${t.id.charAt(0).toUpperCase()+t.id.slice(1)}</span>
+                  </button>
+                `).join('')}
+              </div>
+            </div>
+            <div style="background:rgba(255,255,255,0.05);border-radius:1rem;padding:1rem;margin-bottom:1rem;border:1px solid rgba(255,255,255,0.1);">
+              <h3 style="color:white;margin-bottom:1rem;">🔊 Sound</h3>
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.75rem;">
+                <span style="color:rgba(255,255,255,0.7);">Sound Effects</span>
+                <button onclick="state.settings.soundEnabled=!state.settings.soundEnabled;localStorage.setItem('eclipseTilesSettings',JSON.stringify(state.settings));render();" style="width:56px;height:32px;border-radius:16px;border:none;cursor:pointer;background:${state.settings.soundEnabled?'#6BCB77':'rgba(255,255,255,0.2)'};">
+                  <div style="width:24px;height:24px;border-radius:50%;background:white;transform:translateX(${state.settings.soundEnabled?'28px':'4px'});transition:transform 0.2s;"></div>
+                </button>
+              </div>
+              <div style="display:flex;justify-content:space-between;align-items:center;">
+                <span style="color:rgba(255,255,255,0.7);">Music</span>
+                <button onclick="state.settings.musicEnabled=!state.settings.musicEnabled;localStorage.setItem('eclipseTilesSettings',JSON.stringify(state.settings));render();" style="width:56px;height:32px;border-radius:16px;border:none;cursor:pointer;background:${state.settings.musicEnabled?'#6BCB77':'rgba(255,255,255,0.2)'};">
+                  <div style="width:24px;height:24px;border-radius:50%;background:white;transform:translateX(${state.settings.musicEnabled?'28px':'4px'});transition:transform 0.2s;"></div>
+                </button>
+              </div>
+            </div>
+            <div style="background:rgba(255,255,255,0.05);border-radius:1rem;padding:1rem;border:1px solid rgba(255,255,255,0.1);">
+              <h3 style="color:white;margin-bottom:1rem;">✨ Quality</h3>
+              <div style="display:flex;gap:0.5rem;">
+                ${['Low','Medium','Ultra'].map(q => `
+                  <button onclick="state.settings.quality='${q}';localStorage.setItem('eclipseTilesSettings',JSON.stringify(state.settings));render();" class="btn" style="flex:1;padding:0.5rem;border-radius:0.5rem;background:${state.settings.quality===q?'rgba(255,255,255,0.2)':'rgba(255,255,255,0.05)'};color:${state.settings.quality===q?'white':'rgba(255,255,255,0.5)'};border:none;">${q}</button>
+                `).join('')}
+              </div>
+            </div>
+          </div>
+        </div>
+      `;
+    };
+    
+    const renderAbout = () => {
+      const theme = getTheme();
+      return `
+        <div style="min-height:100vh;display:flex;flex-direction:column;background:linear-gradient(180deg, ${theme.colors[0]} 0%, ${theme.colors[1]} 100%);">
+          <div style="padding:1rem;display:flex;align-items:center;gap:1rem;border-bottom:1px solid rgba(255,255,255,0.1);">
+            <button onclick="state.screen='home';render();" class="btn" style="background:rgba(255,255,255,0.1);width:40px;height:40px;border-radius:0.75rem;color:white;">←</button>
+            <h1 style="color:${theme.accent};font-size:1.5rem;font-weight:bold;">About</h1>
+          </div>
+          <div style="flex:1;overflow-y:auto;padding:1rem;">
+            <div style="background:rgba(255,255,255,0.05);border-radius:1rem;padding:1.5rem;margin-bottom:1rem;text-align:center;border:1px solid rgba(255,255,255,0.1);">
+              <div style="width:80px;height:80px;margin:0 auto 1rem;border-radius:50%;background:linear-gradient(135deg,#FFD700,#FFA500);display:flex;align-items:center;justify-content:center;font-size:2rem;box-shadow:0 0 30px rgba(255,215,0,0.4);">👤</div>
+              <h2 style="color:white;font-size:1.5rem;margin-bottom:0.25rem;">Ethan Anyam</h2>
+              <p style="color:#FFD700;font-size:0.9rem;margin-bottom:0.5rem;">Game Developer & Visionary</p>
+              <p style="color:rgba(255,255,255,0.5);font-size:0.875rem;">📍 Cameroon</p>
+              <p style="color:rgba(255,255,255,0.6);font-size:0.875rem;margin-top:1rem;line-height:1.5;">Passionate about creating immersive gaming experiences that combine beautiful visuals with engaging gameplay.</p>
+            </div>
+            <div style="background:rgba(255,255,255,0.05);border-radius:1rem;padding:1rem;margin-bottom:1rem;border:1px solid rgba(255,255,255,0.1);">
+              <h3 style="color:white;margin-bottom:0.75rem;">✨ Eclipse Tiles</h3>
+              <div style="display:flex;justify-content:space-between;color:rgba(255,255,255,0.6);font-size:0.875rem;margin-bottom:0.5rem;">
+                <span>Version</span><span style="color:white;">1.0.0</span>
+              </div>
+              <div style="display:flex;justify-content:space-between;color:rgba(255,255,255,0.6);font-size:0.875rem;margin-bottom:0.5rem;">
+                <span>Total Levels</span><span style="color:white;">500</span>
+              </div>
+              <div style="display:flex;justify-content:space-between;color:rgba(255,255,255,0.6);font-size:0.875rem;">
+                <span>Challenge Types</span><span style="color:white;">10+</span>
+              </div>
+            </div>
+            <a href="https://PayPal.me/EthanAnyam" target="_blank" style="display:block;padding:1rem;border-radius:1rem;background:linear-gradient(135deg,#FFD700,#FFA500);text-align:center;text-decoration:none;color:#0B0F2A;font-weight:bold;box-shadow:0 10px 30px rgba(255,215,0,0.3);">
+              ❤️ Support the Developer
+            </a>
+          </div>
+        </div>
+      `;
+    };
+    
+    const renderLevels = () => {
+      const theme = getTheme();
+      let nodesHTML = '';
+      for (let i = 1; i <= TOTAL_LEVELS; i++) {
+        const unlocked = i <= state.progress.unlockedLevel;
+        const completed = i < state.progress.unlockedLevel;
+        const stars = state.progress.stars[i] || 0;
+        const color = getLevelColor(i);
+        const isLeft = (i - 1) % 2 === 0;
+        const levelType = getLevelType(i);
+        const typeEmoji = { normal:'🎯', timed:'⏱️', ice:'❄️', bomb:'💣', lava:'🔥', water:'💧', jelly:'🍇', fog:'🌫️', rescue:'🐱', collect:'💎' }[levelType] || '🎯';
+        
+        nodesHTML += `
+          <div style="display:flex;align-items:center;gap:1rem;${isLeft ? '' : 'flex-direction:row-reverse;'}">
+            <div style="flex:1;display:flex;${isLeft ? 'justify-content:flex-end;' : 'justify-content:flex-start;'}">
+              ${unlocked ? `
+                <button onclick="startLevel(${i})" class="level-btn" style="background:linear-gradient(135deg, ${color}dd, ${color}88);border-color:${color};box-shadow:0 0 20px ${color}66;">
+                  ${completed && stars === 3 ? '👑' : i}
+                  ${completed ? `<div style="display:flex;gap:2px;margin-top:2px;">${[1,2,3].map(s=>`<span style="font-size:0.5rem;color:${s<=stars?'#FFD700':'rgba(255,255,255,0.3)'}">★</span>`).join('')}</div>` : ''}
+                </button>
+              ` : `
+                <div class="level-btn locked">🔒</div>
+              `}
+            </div>
+            <div style="width:16px;height:16px;border-radius:50%;background:${unlocked ? color : '#3A3F6B'};${unlocked ? 'box-shadow:0 0 10px '+color+';' : ''}flex-shrink:0;z-index:1;"></div>
+            <div style="flex:1;${isLeft ? 'text-align:left;' : 'text-align:right;'}">
+              ${unlocked ? `<div style="color:rgba(255,255,255,0.5);font-size:0.75rem;">${typeEmoji} ${levelType.charAt(0).toUpperCase()+levelType.slice(1)}</div>` : ''}
+            </div>
+          </div>
+        `;
+      }
+      
+      return `
+        <div style="min-height:100vh;display:flex;flex-direction:column;background:linear-gradient(180deg, ${theme.colors[0]} 0%, ${theme.colors[1]} 100%);">
+          <div style="padding:1rem;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid rgba(255,255,255,0.1);">
+            <button onclick="state.screen='home';render();" class="btn" style="background:none;color:rgba(255,255,255,0.7);font-size:1rem;border:none;">← Back</button>
+            <h1 style="color:${theme.accent};font-size:1.25rem;font-weight:bold;">Select Level</h1>
+            <div style="width:60px;"></div>
+          </div>
+          <div style="flex:1;overflow-y:auto;padding:1.5rem 1rem;">
+            <div style="max-width:400px;margin:0 auto;position:relative;">
+              <div style="position:absolute;left:50%;top:0;bottom:0;width:4px;transform:translateX(-50%);background:linear-gradient(180deg, #3A3F6B, #5E62A8);box-shadow:0 0 10px rgba(94, 98, 168, 0.5);"></div>
+              <div style="position:relative;display:flex;flex-direction:column;gap:1rem;">
+                ${nodesHTML}
+              </div>
+            </div>
+          </div>
+        </div>
+      `;
+    };
+    
+    const renderGame = () => {
+      const theme = getTheme();
+      const tileSize = getTileSize();
+      const thresholds = getStarThresholds(state.level);
+      const levelType = getLevelType(state.level);
+      const progress = Math.min(100, (state.score / thresholds.s3) * 100);
+      const s1Pos = (thresholds.s1 / thresholds.s3) * 100;
+      const s2Pos = (thresholds.s2 / thresholds.s3) * 100;
+      
+      const challengeNames = { normal:'🎯 Match', timed:'⏱️ Timed', ice:'❄️ Ice Break', bomb:'💣 Defuse', lava:'🔥 Cool Down', water:'💧 Stay Dry', jelly:'🍇 Clear Jelly', fog:'🌫️ Fog Clear', rescue:'🐱 Rescue', collect:'💎 Collect' };
+      
+      let boardHTML = '';
+      for (let r = 0; r < GRID_SIZE; r++) {
+        for (let c = 0; c < GRID_SIZE; c++) {
+          const tile = state.board[r][c];
+          const selected = state.selected && state.selected.r === r && state.selected.c === c;
+          const tileColor = tile ? TILE_COLORS.find(t => t.name === tile.colorType) : null;
+          
+          boardHTML += `
+            <button onclick="handleTileClick(${r},${c})" class="tile ${selected ? 'selected' : ''}" style="width:${tileSize}px;height:${tileSize}px;${tile ? `background:linear-gradient(135deg,${tileColor.gradient[0]}ee,${tileColor.gradient[1]}aa);box-shadow:${selected ? '0 0 25px '+tileColor.color+',0 0 50px '+tileColor.color+'66' : '0 4px 15px '+tileColor.color+'44'};` : 'background:transparent;'}" ${state.animating ? 'disabled' : ''}>
+              ${tile ? '<div class="shine"></div>' : ''}
+              ${tile?.ice > 0 ? '<div class="ice">❄️</div>' : ''}
+              ${tile?.bomb > 0 ? `<div class="special">💣</div><div class="bomb-timer">${tile.bomb}</div>` : ''}
+              ${tile?.lava ? '<div class="lava"></div>' : ''}
+              ${tile?.jelly ? '<div class="jelly"></div>' : ''}
+              ${tile?.fog ? '<div class="fog">?</div>' : ''}
+              ${tile?.rescue ? '<div class="special">🐱</div>' : ''}
+              ${tile?.collectible ? '<div class="special">💎</div>' : ''}
+              ${tile?.special === 'rowClear' ? '<div class="special">⚡</div>' : ''}
+              ${tile?.special === 'colorBomb' ? '<div class="special">🌈</div>' : ''}
+            </button>
+          `;
+        }
+      }
+      
+      let modalHTML = '';
+      if (state.gameStatus === 'won') {
+        const stars = state.score >= thresholds.s3 ? 3 : state.score >= thresholds.s2 ? 2 : 1;
+        modalHTML = `
+          <div class="modal-overlay">
+            <div class="modal" style="box-shadow:0 0 80px rgba(255, 215, 0, 0.4);">
+              <div style="font-size:4rem;margin-bottom:1rem;">🏆</div>
+              <h2 style="font-size:1.75rem;font-weight:bold;color:#FFD700;margin-bottom:0.5rem;">Level Complete!</h2>
+              <p style="color:rgba(255,255,255,0.7);margin-bottom:1rem;">Score: ${state.score.toLocaleString()}</p>
+              <div style="display:flex;justify-content:center;gap:0.5rem;margin-bottom:1.5rem;">
+                ${[1,2,3].map(s => `<span style="font-size:2.5rem;color:${s <= stars ? '#FFD700' : 'rgba(255,255,255,0.2)'};filter:${s <= stars ? 'drop-shadow(0 0 10px #FFD700)' : 'none'};animation:${s <= stars ? 'star-pop 0.5s ease-out' : 'none'};">★</span>`).join('')}
+              </div>
+              <div style="display:flex;gap:0.75rem;">
+                <button onclick="state.screen='levels';render();" class="btn" style="flex:1;padding:0.75rem 1.5rem;border-radius:0.75rem;background:rgba(255,255,255,0.1);color:white;">Levels</button>
+                <button onclick="startLevel(${state.level + 1})" class="btn" style="flex:1;padding:0.75rem 1.5rem;border-radius:0.75rem;background:linear-gradient(135deg,#FFD700,#FFA500);color:#0B0F2A;font-weight:bold;">Next Level</button>
+              </div>
+            </div>
+          </div>
+        `;
+      } else if (state.gameStatus === 'lost') {
+        modalHTML = `
+          <div class="modal-overlay">
+            <div class="modal" style="box-shadow:0 0 40px rgba(255, 107, 107, 0.3);">
+              <div style="font-size:4rem;margin-bottom:1rem;">😢</div>
+              <h2 style="font-size:1.75rem;font-weight:bold;color:white;margin-bottom:0.5rem;">${levelType === 'timed' ? "Time's Up!" : state.waterLevel >= 70 ? 'Flooded!' : state.heatLevel >= 100 ? 'Overheated!' : 'Out of Moves!'}</h2>
+              <p style="color:rgba(255,255,255,0.7);margin-bottom:1.5rem;">Score: ${state.score.toLocaleString()}</p>
+              <div style="display:flex;gap:0.75rem;">
+                <button onclick="state.screen='levels';render();" class="btn" style="flex:1;padding:0.75rem 1.5rem;border-radius:0.75rem;background:rgba(255,255,255,0.1);color:white;">Levels</button>
+                <button onclick="startLevel(${state.level})" class="btn" style="flex:1;padding:0.75rem 1.5rem;border-radius:0.75rem;background:linear-gradient(135deg,#4D96FF,#6BCB77);color:white;font-weight:bold;">Retry</button>
+              </div>
+            </div>
+          </div>
+        `;
+      }
+      
+      return `
+        <div style="min-height:100vh;display:flex;flex-direction:column;background:linear-gradient(180deg, ${theme.colors[0]} 0%, ${theme.colors[1]} 100%);position:relative;">
+          <div class="challenge-badge">${challengeNames[levelType] || levelType}</div>
+          
+          <div style="padding:0.75rem;display:flex;align-items:center;justify-content:space-between;">
+            <button onclick="state.screen='levels';render();" class="btn" style="width:40px;height:40px;border-radius:0.75rem;background:rgba(255,255,255,0.1);color:rgba(255,255,255,0.7);font-size:1.25rem;">🏠</button>
+            <div style="display:flex;align-items:center;gap:0.75rem;">
+              <div style="text-align:center;padding:0.25rem 0.5rem;background:rgba(255,255,255,0.05);border-radius:0.5rem;">
+                <div style="color:rgba(255,255,255,0.5);font-size:0.65rem;">LEVEL</div>
+                <div style="color:${theme.accent};font-weight:bold;">${state.level}</div>
+              </div>
+              <div style="text-align:center;padding:0.25rem 0.5rem;background:rgba(255,255,255,0.05);border-radius:0.5rem;">
+                <div style="color:rgba(255,255,255,0.5);font-size:0.65rem;">SCORE</div>
+                <div style="color:white;font-weight:bold;">${state.score.toLocaleString()}</div>
+              </div>
+              ${levelType === 'timed' ? `
+                <div style="text-align:center;padding:0.25rem 0.5rem;background:rgba(255,255,255,0.05);border-radius:0.5rem;">
+                  <div style="color:rgba(255,255,255,0.5);font-size:0.65rem;">⏱️</div>
+                  <div style="color:${state.timeLeft <= 10 ? '#FF6B6B' : '#00D9FF'};font-weight:bold;">${state.timeLeft}s</div>
+                </div>
+              ` : ''}
+              ${levelType === 'rescue' ? `<div style="color:#FFD93D;font-weight:bold;">🐱 ${state.rescued}/4</div>` : ''}
+              ${levelType === 'collect' ? `<div style="color:#C9B1FF;font-weight:bold;">💎 ${state.collected}/10</div>` : ''}
+            </div>
+            <button onclick="startLevel(${state.level})" class="btn" style="width:40px;height:40px;border-radius:0.75rem;background:rgba(255,255,255,0.1);color:rgba(255,255,255,0.7);font-size:1.25rem;">🔄</button>
+          </div>
+          
+          <div style="padding:0 1rem;">
+            <div class="star-bar">
+              <div class="fill" style="width:${progress}%;"></div>
+              <div class="star-marker ${state.score >= thresholds.s1 ? 'earned' : ''}" style="left:${s1Pos}%;color:${state.score >= thresholds.s1 ? '#FFD700' : 'rgba(255,255,255,0.3)'};">★</div>
+              <div class="star-marker ${state.score >= thresholds.s2 ? 'earned' : ''}" style="left:${s2Pos}%;color:${state.score >= thresholds.s2 ? '#FFD700' : 'rgba(255,255,255,0.3)'};">★</div>
+              <div class="star-marker ${state.score >= thresholds.s3 ? 'earned' : ''}" style="left:100%;color:${state.score >= thresholds.s3 ? '#FFD700' : 'rgba(255,255,255,0.3)'};">★</div>
+            </div>
+          </div>
+          
+          <div style="padding:0.5rem 1rem;display:flex;justify-content:space-between;font-size:0.875rem;">
+            <div><span style="color:rgba(255,255,255,0.5);">Moves:</span> <span style="font-weight:bold;color:${state.moves <= 5 ? '#FF6B6B' : 'white'};">${state.moves}</span></div>
+            <div><span style="color:rgba(255,255,255,0.5);">★1:</span> <span style="color:#6BCB77;">${thresholds.s1}</span></div>
+          </div>
+          
+          <div style="flex:1;display:flex;align-items:center;justify-content:center;padding:1rem;position:relative;">
+            <div style="padding:0.75rem;border-radius:1rem;background:rgba(0,0,0,0.4);box-shadow:0 0 60px rgba(0,0,0,0.5);position:relative;overflow:hidden;">
+              <div style="display:grid;grid-template-columns:repeat(${GRID_SIZE},${tileSize}px);grid-template-rows:repeat(${GRID_SIZE},${tileSize}px);gap:6px;">
+                ${boardHTML}
+              </div>
+              ${levelType === 'water' ? `<div class="water-overlay" style="height:${state.waterLevel}%;"></div>` : ''}
+            </div>
+            ${levelType === 'lava' ? `<div class="heat-meter"><div class="fill" style="height:${state.heatLevel}%;"></div></div>` : ''}
+          </div>
+          
+          <button onclick="useHint()" class="hint-btn" ${state.hintCooldown > 0 ? 'disabled' : ''}>${state.hintCooldown > 0 ? state.hintCooldown : '💡'}</button>
+          
+          ${state.showCombo ? `<div class="combo-display">${state.combo}x COMBO!</div>` : ''}
+          ${modalHTML}
+        </div>
+      `;
+    };
+    
+    const render = () => {
+      const app = document.getElementById('app');
+      if (state.screen === 'home') app.innerHTML = renderHome();
+      else if (state.screen === 'levels') app.innerHTML = renderLevels();
+      else if (state.screen === 'game') app.innerHTML = renderGame();
+      else if (state.screen === 'settings') app.innerHTML = renderSettings();
+      else if (state.screen === 'about') app.innerHTML = renderAbout();
+      
+      // GSAP animations
+      if (typeof gsap !== 'undefined') {
+        gsap.from('.btn', { scale: 0.9, opacity: 0, duration: 0.3, stagger: 0.1, ease: 'back.out(1.7)' });
+      }
+    };
+    
+    loadProgress();
+    render();
+    window.addEventListener('resize', render);
+  </script>
+</body>
+</html>
+
+  <script>
+    
+  </script>
+</body>
+</html>
